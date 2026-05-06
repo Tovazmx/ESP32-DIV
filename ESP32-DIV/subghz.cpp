@@ -503,9 +503,8 @@ static bool buzzerArmed = false;
 static uint32_t buzzerOffAtMs = 0;
 static void replayBeep(uint16_t hz = 2200, uint16_t ms = 60) {
   #ifdef BUZZER_PIN
-  ledcSetup(BUZZER_LEDC_CH, 4000, 8);
-  ledcAttachPin(BUZZER_PIN, BUZZER_LEDC_CH);
-  ledcWriteTone(BUZZER_LEDC_CH, hz);
+  ledcAttach(BUZZER_PIN, 4000, 8);
+  ledcWriteTone(BUZZER_PIN, hz);
   buzzerArmed = true;
   buzzerOffAtMs = millis() + ms;
   #endif
@@ -515,9 +514,8 @@ static void replayBeepPoll() {
   #ifdef BUZZER_PIN
   if (!buzzerArmed) return;
   if ((int32_t)(millis() - buzzerOffAtMs) < 0) return;
-  ledcWriteTone(BUZZER_LEDC_CH, 0);
-
-  ledcDetachPin(BUZZER_PIN);
+  ledcWriteTone(BUZZER_PIN, 0);
+  ledcDetach(BUZZER_PIN);
   buzzerArmed = false;
   #endif
 }
