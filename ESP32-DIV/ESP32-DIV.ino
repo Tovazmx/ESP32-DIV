@@ -17,7 +17,7 @@ TFT_eSPI tft = TFT_eSPI();
 PCF8574 pcf(pcf_ADDR);
 
 void setBrightness(uint8_t value) {
-  ledcWrite(BACKLIGHT_PIN, value);
+  ledcWrite(PWM_CHANNEL, value);
 }
 
 bool feature_exit_requested = false;
@@ -2558,7 +2558,8 @@ void setup() {
 
   initSDCard();
 
-  ledcAttach(BACKLIGHT_PIN, PWM_FREQ, PWM_RESOLUTION);
+  ledcSetup(PWM_CHANNEL, PWM_FREQ, PWM_RESOLUTION);
+  ledcAttachPin(BACKLIGHT_PIN, PWM_CHANNEL);
   setBrightness(100);
 
   loading(100, UI_ICON, 0, 0, 2, true);

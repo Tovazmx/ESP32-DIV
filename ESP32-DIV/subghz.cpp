@@ -6,6 +6,20 @@
 #include "icon.h"
 #include "shared.h"
 
+// Apply optimal OOK/ASK config for CC1101.
+// Must be called after Init() and setSpiPin(), before SetRx()/SetTx().
+// Fixes TX not working: default Init() uses FSK + min PA.
+static void cc1101OOKInit(float mhz = 433.92f) {
+  ELECHOUSE_cc1101.setCCMode(0);        // raw async serial (MCU drives GDO0 for TX)
+  ELECHOUSE_cc1101.setModulation(2);    // ASK/OOK — standard for 433/868 remotes
+  ELECHOUSE_cc1101.setMHZ(mhz);
+  ELECHOUSE_cc1101.setDRate(3.793);     // 3.8 kbaud — covers most OOK remotes
+  ELECHOUSE_cc1101.setRxBW(812.5);      // wide BW catches different protocols
+  ELECHOUSE_cc1101.setSyncMode(0);      // no sync word — raw preamble pass-through
+  ELECHOUSE_cc1101.setAdrChk(0);        // no address filtering
+  ELECHOUSE_cc1101.setPA(12);           // +10 dBm max TX power
+  ELECHOUSE_cc1101.setGDO(CC1101_GDO0, CC1101_GDO2);
+}
 
 namespace {
   static constexpr const char* SUBGHZ_DIR = "/subghz";
@@ -503,8 +517,9 @@ static bool buzzerArmed = false;
 static uint32_t buzzerOffAtMs = 0;
 static void replayBeep(uint16_t hz = 2200, uint16_t ms = 60) {
   #ifdef BUZZER_PIN
-  ledcAttach(BUZZER_PIN, 4000, 8);
-  ledcWriteTone(BUZZER_PIN, hz);
+  ledcSetup(BUZZER_LEDC_CH, 4000, 8);
+  ledcAttachPin(BUZZER_PIN, BUZZER_LEDC_CH);
+  ledcWriteTone(BUZZER_LEDC_CH, hz);
   buzzerArmed = true;
   buzzerOffAtMs = millis() + ms;
   #endif
@@ -514,8 +529,8 @@ static void replayBeepPoll() {
   #ifdef BUZZER_PIN
   if (!buzzerArmed) return;
   if ((int32_t)(millis() - buzzerOffAtMs) < 0) return;
-  ledcWriteTone(BUZZER_PIN, 0);
-  ledcDetach(BUZZER_PIN);
+  ledcWriteTone(BUZZER_LEDC_CH, 0);
+  ledcDetachPin(BUZZER_PIN);
   buzzerArmed = false;
   #endif
 }
@@ -637,8 +652,12 @@ String getUserInputName() {
 
 void sendSignal() {
 
+    ELECHOUSE_cc1101.setSidle();
+    ELECHOUSE_cc1101.setModulation(2);   // ASK/OOK
+    ELECHOUSE_cc1101.setPA(12);          // +10 dBm
+    ELECHOUSE_cc1101.setMHZ(subghz_frequency_list[currentFrequencyIndex] / 1000000.0);
     mySwitch.disableReceive();
-    delay(100);
+    delay(50);
     mySwitch.enableTransmit(REPLAY_TX_PIN);
     ELECHOUSE_cc1101.SetTx();
 
@@ -934,14 +953,13 @@ void ReplayAttackSetup() {
   ELECHOUSE_cc1101.setSpiPin(CC1101_SCK, CC1101_MISO, CC1101_MOSI, CC1101_CS);
 
   ELECHOUSE_cc1101.Init();
-
-  ELECHOUSE_cc1101.setGDO(CC1101_GDO0, CC1101_GDO2);
+  cc1101OOKInit();
 
   ELECHOUSE_cc1101.SetRx();
 
   mySwitch.enableReceive(REPLAY_RX_PIN);
   mySwitch.enableTransmit(REPLAY_TX_PIN);
-  mySwitch.setRepeatTransmit(8);
+  mySwitch.setRepeatTransmit(10);
 
   EEPROM.begin(EEPROM_SIZE);
   readProfileCount();
@@ -1471,10 +1489,12 @@ void transmitProfile(int index) {
     Profile profileToSend = selectedProfile;
 
     ELECHOUSE_cc1101.setSidle();
+    ELECHOUSE_cc1101.setModulation(2);   // ASK/OOK
+    ELECHOUSE_cc1101.setPA(12);          // +10 dBm — was missing, caused TX failure
     ELECHOUSE_cc1101.setMHZ(profileToSend.frequency / 1000000.0);
 
     mySwitch.disableReceive();
-    delay(100);
+    delay(50);
     mySwitch.enableTransmit(SUBGHZ_TX_PIN);
     ELECHOUSE_cc1101.SetTx();
 
@@ -1734,12 +1754,13 @@ void saveSetup() {
     uiDrawn = false;
 
     ELECHOUSE_cc1101.Init();
-    ELECHOUSE_cc1101.setGDO(CC1101_GDO0, CC1101_GDO2);
+    cc1101OOKInit();
+
     ELECHOUSE_cc1101.SetRx();
 
     mySwitch.enableReceive(SUBGHZ_RX_PIN);
     mySwitch.enableTransmit(SUBGHZ_TX_PIN);
-    mySwitch.setRepeatTransmit(8);
+    mySwitch.setRepeatTransmit(10);
 
     refreshSdIndex(false);
     cacheDirty = true;
